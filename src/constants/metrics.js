@@ -1,8 +1,8 @@
 export const METRICS = {
   Total_Shots:         'Finalizações',
-  Shots_On_Target:     'Fin. no Alvo',
+  Shots_On_Target:     'Chutes no Gol',
   Total_Shots_All:     'Finalizações Totais',
-  Shots_On_Target_All: 'Fin. Totais no Alvo',
+  Shots_On_Target_All: 'Chutes no Gol - Total',
   Goals_For:           'Gols Feitos',
   Goals_Against:       'Gols Sofridos',
   Corners:             'Escanteios',
@@ -16,6 +16,9 @@ export const METRICS = {
 };
 
 export const METRIC_KEYS = Object.keys(METRICS);
+
+// Metrics that only exist for FT — HT/2T pills must be disabled when these are active
+export const FT_ONLY_METRICS = new Set(['Throw_Ins', 'Fouls']);
 
 export const METRIC_COLORS = [
   '#63b3ed',

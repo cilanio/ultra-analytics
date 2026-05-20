@@ -4,18 +4,23 @@ const PERIODS = [
   { value: '2T', label: '2º Tempo'  },
 ];
 
-export default function PeriodPills({ activePeriod, onSetPeriod }) {
+export default function PeriodPills({ activePeriod, onSetPeriod, disableSubPeriods }) {
   return (
     <div className="period-pills">
-      {PERIODS.map(({ value, label }) => (
-        <div
-          key={value}
-          className={`ppill${activePeriod === value ? ' active' : ''}`}
-          onClick={() => onSetPeriod(value)}
-        >
-          {label}
-        </div>
-      ))}
+      {PERIODS.map(({ value, label }) => {
+        const isDisabled = disableSubPeriods && value !== 'FT';
+        return (
+          <div
+            key={value}
+            className={`ppill${activePeriod === value && !isDisabled ? ' active' : ''}${isDisabled ? ' disabled' : ''}`}
+            style={isDisabled ? { opacity: 0.35, cursor: 'not-allowed', pointerEvents: 'none' } : {}}
+            onClick={() => !isDisabled && onSetPeriod(value)}
+            title={isDisabled ? 'Disponível apenas para Jogo Todo' : undefined}
+          >
+            {label}
+          </div>
+        );
+      })}
     </div>
   );
 }

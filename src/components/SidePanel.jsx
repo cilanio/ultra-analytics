@@ -9,9 +9,9 @@ const LINE_TOGGLES = [
   { id: 5, label: 'Total Jogo', color: '#a3e635' },
 ];
 
-export default function SidePanel({ onToggleLine, onToggleResult }) {
+export default function SidePanel({ onToggleLine, onToggleResult, showLineToggles = true }) {
   const [linesOpen,   setLinesOpen]   = useState(true);
-  const [resultOpen,  setResultOpen]  = useState(false);
+  const [resultOpen,  setResultOpen]  = useState(true); // starts open
   const [lineChecked, setLineChecked] = useState(() => LINE_TOGGLES.map(() => true));
   const [resultOn,    setResultOn]    = useState(false);
 
@@ -28,25 +28,30 @@ export default function SidePanel({ onToggleLine, onToggleResult }) {
 
   return (
     <div className="side-panel">
-      <div className="side-block">
-        <div className="side-block-header" onClick={() => setLinesOpen((o) => !o)}>
-          <span className="side-block-title">Linhas</span>
-          <span className={`side-block-arrow${linesOpen ? ' open' : ''}`}>▼</span>
+      {/* LINES — only shown in single metric mode */}
+      {showLineToggles && (
+        <div className="side-block">
+          <div className="side-block-header" onClick={() => setLinesOpen((o) => !o)}>
+            <span className="side-block-title">Linhas</span>
+            <span className={`side-block-arrow${linesOpen ? ' open' : ''}`}>▼</span>
+          </div>
+          <div className={`side-block-body${linesOpen ? ' open' : ''}`}>
+            {LINE_TOGGLES.map(({ id, label, color }) => (
+              <label key={id} className="toggle-row">
+                <input
+                  type="checkbox"
+                  checked={lineChecked[id]}
+                  style={{ color }}
+                  onChange={() => handleLineChange(id)}
+                />
+                <span className="toggle-label">{label}</span>
+              </label>
+            ))}
+          </div>
         </div>
-        <div className={`side-block-body${linesOpen ? ' open' : ''}`}>
-          {LINE_TOGGLES.map(({ id, label, color }) => (
-            <label key={id} className="toggle-row">
-              <input
-                type="checkbox"
-                checked={lineChecked[id]}
-                style={{ color }}
-                onChange={() => handleLineChange(id)}
-              />
-              <span className="toggle-label">{label}</span>
-            </label>
-          ))}
-        </div>
-      </div>
+      )}
+
+      {/* RESULTS — always shown */}
       <div className="side-block">
         <div className="side-block-header" onClick={() => setResultOpen((o) => !o)}>
           <span className="side-block-title">Resultados</span>

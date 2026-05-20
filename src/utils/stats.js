@@ -57,10 +57,13 @@ export function resultByPeriod(g, mode, period) {
 
 export function getVal(g, key, mode, period) {
   const m = eMode(g, mode);
+  // Always sum both teams regardless of mode — gives total shots in the match
   if (key === 'Total_Shots_All')
-    return (parseFloat(g[`Total_Shots_Home_${period}`]) || 0) + (parseFloat(g[`Total_Shots_Away_${period}`]) || 0);
+    return (parseFloat(g[`Total_Shots_Home_${period}`]) || 0) +
+           (parseFloat(g[`Total_Shots_Away_${period}`]) || 0);
   if (key === 'Shots_On_Target_All')
-    return (parseFloat(g[`Shots_On_Target_Home_${period}`]) || 0) + (parseFloat(g[`Shots_On_Target_Away_${period}`]) || 0);
+    return (parseFloat(g[`Shots_On_Target_Home_${period}`]) || 0) +
+           (parseFloat(g[`Shots_On_Target_Away_${period}`]) || 0);
   if (key === 'Goals_For')     return goalsByPeriod(g, mode, period);
   if (key === 'Goals_Against') return goalsConcededByPeriod(g, mode, period);
   const side = m === 'home' ? 'Home' : 'Away';

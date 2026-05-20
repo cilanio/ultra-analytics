@@ -9,27 +9,41 @@ const hexToRgba = (hex, a) => {
   return `rgba(${r},${g},${b},${a})`;
 };
 
+// Metrics where value already represents both teams — no oppVal needed
+const ALL_METRICS = new Set(['Total_Shots_All', 'Shots_On_Target_All']);
+
+// Label for total-game metrics depending on period
+export const totalLabel = (period) =>
+  period === 'HT' ? 'Total HT' : period === '2T' ? 'Total 2T' : 'Total Jogo';
+
 export function useSingleChartData(games, mode, period, metricKey) {
   return useMemo(() => {
     if (!games.length) return null;
+
     const stats = buildStats(games, mode, period);
     const stat  = stats.find((s) => s.key === metricKey);
     if (!stat) return null;
 
-    const isAway = mode === 'away';
+    const isAway     = mode === 'away';
+    const isAllMetric = ALL_METRICS.has(metricKey);
     const tc = isAway
       ? { line: 'rgba(255,255,255,.85)', f0: 'rgba(255,255,255,.09)', f1: 'rgba(255,255,255,0)', pt: '#ffffff', avgL: 'rgba(255,255,255,.2)' }
       : { line: 'rgba(99,179,237,.9)',   f0: 'rgba(99,179,237,.14)',  f1: 'rgba(99,179,237,0)',  pt: '#63b3ed', avgL: 'rgba(99,179,237,.25)' };
 
     const raw = games.map((g) => {
-      const m      = eMode(g, mode);
-      const isH    = m === 'home';
-      const val    = getVal(g, metricKey, mode, period);
-      const oppVal = getVal(g, metricKey, isH ? 'away' : 'home', period);
+      const m   = eMode(g, mode);
+      const isH = m === 'home';
+      const val = getVal(g, metricKey, mode, period);
+      // For _All metrics, value is already the sum of both teams
+      const oppVal = isAllMetric ? 0 : getVal(g, metricKey, isH ? 'away' : 'home', period);
       return {
         val,
-        vs:    mode === 'all' ? `${isH ? '⌂' : '✈'} ${isH ? g.Away : g.Home}` : (isH ? g.Away : g.Home),
-        total: val + oppVal,
+        vs:     mode === 'all'
+          ? `${isH ? '⌂' : '✈'} ${isH ? g.Away : g.Home}`
+          : (isH ? g.Away : g.Home),
+        round:  g.Round || g.Rodada || null,
+        total:  isAllMetric ? val : val + oppVal,
+        isAll:  isAllMetric,
       };
     });
 
@@ -67,19 +81,30 @@ export function useSingleChartData(games, mode, period, metricKey) {
         borderWidth: 1.5, pointRadius: 0, fill: false, tension: 0.3, order: 6 },
     ];
 
-    return { datasets, raw, stat, tc };
+    return { datasets, raw, stat, tc, isAllMetric, period };
   }, [games, mode, period, metricKey]);
 }
 
 export function useMultiChartData(games, mode, period, metricKeys) {
   return useMemo(() => {
     if (!games.length || !metricKeys.some(Boolean)) return null;
-    const raw = games.map((g) => ({ vs: mode === 'home' ? g.Away : g.Home }));
+
+    const raw = games.map((g) => {
+      const m   = eMode(g, mode);
+      const isH = m === 'home';
+      return {
+        vs:    mode === 'all' ? `${isH ? '⌂' : '✈'} ${isH ? g.Away : g.Home}` : (isH ? g.Away : g.Home),
+        round: g.Round || g.Rodada || null,
+      };
+    });
+
     const datasets = metricKeys.filter(Boolean).map((key, i) => {
       const vals  = games.map((g) => getVal(g, key, mode, period));
       const color = METRIC_COLORS[i] || '#fff';
       return {
-        label: METRICS[key], data: vals, borderColor: color,
+        label: METRICS[key],
+        data:  vals,
+        borderColor: color,
         backgroundColor: (ctx2) => {
           const { ctx: cv, chartArea: ca } = ctx2.chart;
           if (!ca) return 'transparent';
@@ -93,6 +118,7 @@ export function useMultiChartData(games, mode, period, metricKeys) {
         fill: true, tension: 0.35, order: i + 1,
       };
     });
+
     return { datasets, raw };
   }, [games, mode, period, metricKeys]);
 }
@@ -100,18 +126,34 @@ export function useMultiChartData(games, mode, period, metricKeys) {
 export function useDualChartData(gamesH, gamesAw, period, metricKey, teamH, teamA) {
   return useMemo(() => {
     if (!gamesH.length && !gamesAw.length) return null;
+
+    const isAllMetric = ALL_METRICS.has(metricKey);
     const statsH  = buildStats(gamesH,  'home', period);
     const statsAw = buildStats(gamesAw, 'away', period);
     const sH      = statsH.find((s) => s.key === metricKey);
     const sA      = statsAw.find((s) => s.key === metricKey);
     if (!sH || !sA) return null;
 
-    const rawH = gamesH.map((g)  => ({ val: getVal(g, metricKey, 'home', period), vs: g.Away }));
-    const rawA = gamesAw.map((g) => ({ val: getVal(g, metricKey, 'away', period), vs: g.Home }));
-    const vH   = rawH.map((d) => d.val);
-    const vA   = rawA.map((d) => d.val);
-    const len  = Math.max(vH.length, vA.length);
-    const labels = Array.from({ length: len }, (_, i) => rawH[i]?.vs || rawA[i]?.vs || `#${i + 1}`);
+    const rawH = gamesH.map((g) => ({
+      val:   getVal(g, metricKey, 'home', period),
+      vs:    g.Away,
+      round: g.Round || g.Rodada || null,
+    }));
+    const rawA = gamesAw.map((g) => ({
+      val:   getVal(g, metricKey, 'away', period),
+      vs:    g.Home,
+      round: g.Round || g.Rodada || null,
+    }));
+
+    const vH  = rawH.map((d) => d.val);
+    const vA  = rawA.map((d) => d.val);
+    const len = Math.max(vH.length, vA.length);
+
+    const labels = Array.from({ length: len }, (_, i) => {
+      const r = rawH[i]?.round || rawA[i]?.round;
+      return r ? `Rodada ${r}` : `#${i + 1}`;
+    });
+
     const pH = [...vH, ...new Array(len - vH.length).fill(null)];
     const pA = [...vA, ...new Array(len - vA.length).fill(null)];
 
@@ -124,21 +166,25 @@ export function useDualChartData(gamesH, gamesAw, period, metricKey, teamH, team
       return grad;
     };
 
+    // For _All metrics use "Total Jogo/HT/2T" instead of team names
+    const labelH = isAllMetric ? totalLabel(period) : teamH;
+    const labelA = isAllMetric ? totalLabel(period) : teamA;
+
     const datasets = [
-      { label: teamH, data: pH, borderColor: 'rgba(99,179,237,.9)', backgroundColor: makeGrad(99,179,237),
+      { label: labelH, data: pH, borderColor: 'rgba(99,179,237,.9)', backgroundColor: makeGrad(99,179,237),
         borderWidth: 2.5, pointRadius: 4, pointHoverRadius: 7,
         pointBackgroundColor: '#63b3ed', pointBorderColor: '#060a10', pointBorderWidth: 2,
         fill: true, tension: 0.35, spanGaps: false, order: 1 },
-      { label: teamA, data: pA, borderColor: 'rgba(255,255,255,.8)', backgroundColor: makeGrad(255,255,255),
+      { label: labelA, data: pA, borderColor: 'rgba(255,255,255,.8)', backgroundColor: makeGrad(255,255,255),
         borderWidth: 2.5, pointRadius: 4, pointHoverRadius: 7,
         pointBackgroundColor: '#ffffff', pointBorderColor: '#060a10', pointBorderWidth: 2,
         fill: true, tension: 0.35, spanGaps: false, order: 2 },
       { label: `Média ${teamH}`, data: new Array(len).fill(sH.avg),
         borderColor: 'rgba(99,179,237,.3)', borderDash: [3,6], borderWidth: 1, pointRadius: 0, fill: false, order: 3 },
       { label: `Média ${teamA}`, data: new Array(len).fill(sA.avg),
-        borderColor: 'rgba(255,255,255,.25)', borderDash: [3,6], borderWidth: 1, pointRadius: 0, fill: false, order: 4 },
+        borderColor: 'rgba(255,255,255,.6)', borderDash: [3,6], borderWidth: 1, pointRadius: 0, fill: false, order: 4 },
     ];
 
-    return { datasets, labels, sH, sA };
+    return { datasets, labels, rawH, rawA, sH, sA, isAllMetric, period };
   }, [gamesH, gamesAw, period, metricKey, teamH, teamA]);
 }

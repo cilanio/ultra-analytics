@@ -2,38 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Chart } from 'chart.js/auto';
 import { METRICS } from '../constants/metrics';
 import { resultByPeriod } from '../utils/stats';
-
-const CHART_OPTIONS = (raw, teamName) => ({
-  responsive: true,
-  maintainAspectRatio: false,
-  interaction: { mode: 'index', intersect: false },
-  plugins: {
-    legend: { display: false },
-    tooltip: {
-      backgroundColor: '#0d1420', titleColor: '#e2e8f0', bodyColor: '#cbd5e0',
-      borderColor: 'rgba(255,255,255,0.08)', borderWidth: 1, padding: 12,
-      titleFont: { family: 'Syne', size: 11, weight: '700' },
-      bodyFont:  { family: 'DM Sans', size: 12 },
-      callbacks: {
-        title: (items) => `vs ${raw[items[0].dataIndex]?.vs ?? ''}`,
-        label: (item) => {
-          const d = raw[item.dataIndex];
-          if (item.datasetIndex === 0) return `  ${teamName}: ${d.val} / Total: ${d.total}`;
-          if (item.datasetIndex === 1) return `  Média móvel: ${item.raw}`;
-          if (item.datasetIndex === 3) return `  Máx série: ${item.raw}`;
-          if (item.datasetIndex === 4) return `  Mín série: ${item.raw}`;
-          if (item.datasetIndex === 5) return `  Total jogo: ${d.total}`;
-          return null;
-        },
-      },
-      filter: (item) => item.datasetIndex !== 2,
-    },
-  },
-  scales: {
-    y: { min: 0, grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#94a3b8', font: { family: 'DM Sans', size: 10 }, padding: 6 }, border: { dash: [4,6], color: 'transparent' } },
-    x: { grid: { display: false }, ticks: { color: '#94a3b8', font: { family: 'DM Sans', size: 9 }, maxRotation: 40, maxTicksLimit: 14 }, border: { color: 'rgba(255,255,255,0.05)' } },
-  },
-});
+import { totalLabel } from '../hooks/useChartData';
 
 export default function TrendChart({
   chartData, teamName, metricKey,
@@ -51,14 +20,58 @@ export default function TrendChart({
   useEffect(() => {
     if (!chartData || !canvasRef.current) return;
     if (instanceRef.current) instanceRef.current.destroy();
+
+    const { raw, isAllMetric } = chartData;
+
     instanceRef.current = new Chart(canvasRef.current, {
       type: 'line',
-      data: { labels: chartData.raw.map((d) => d.vs || '?'), datasets: chartData.datasets },
-      options: CHART_OPTIONS(chartData.raw, teamName),
+      data: { labels: raw.map((d) => d.vs || '?'), datasets: chartData.datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#0d1420', titleColor: '#e2e8f0', bodyColor: '#cbd5e0',
+            borderColor: 'rgba(255,255,255,0.08)', borderWidth: 1, padding: 12,
+            titleFont: { family: 'Syne', size: 11, weight: '700' },
+            bodyFont:  { family: 'DM Sans', size: 12 },
+            callbacks: {
+              title: (items) => {
+                const d = raw[items[0].dataIndex];
+                const roundStr = d.round ? `Rodada ${d.round} · ` : '';
+                return `${roundStr}vs ${d.vs}`;
+              },
+              label: (item) => {
+                const d = raw[item.dataIndex];
+                if (item.datasetIndex === 0) {
+                  // For _All metrics show "Total Jogo: X" instead of team name
+                  if (isAllMetric) {
+                    return `  ${totalLabel(period)}: ${d.val}`;
+                  }
+                  return `  ${teamName}: ${d.val} / Total: ${d.total}`;
+                }
+                if (item.datasetIndex === 1) return `  Média móvel: ${item.raw}`;
+                if (item.datasetIndex === 3) return `  Máx série: ${item.raw}`;
+                if (item.datasetIndex === 4) return `  Mín série: ${item.raw}`;
+                if (item.datasetIndex === 5) return `  Total jogo: ${d.total}`;
+                return null;
+              },
+            },
+            filter: (item) => item.datasetIndex !== 2,
+          },
+        },
+        scales: {
+          y: { min: 0, grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#94a3b8', font: { family: 'DM Sans', size: 10 }, padding: 6 }, border: { dash: [4,6], color: 'transparent' } },
+          x: { grid: { display: false }, ticks: { color: '#94a3b8', font: { family: 'DM Sans', size: 9 }, maxRotation: 40, maxTicksLimit: 14 }, border: { color: 'rgba(255,255,255,0.05)' } },
+        },
+      },
     });
     return () => { instanceRef.current?.destroy(); instanceRef.current = null; };
-  }, [chartData, teamName]);
+  }, [chartData, teamName, period]);
 
+  // Apply line visibility
   useEffect(() => {
     const chart = instanceRef.current;
     if (!chart || !lineVisibility) return;
@@ -68,6 +81,7 @@ export default function TrendChart({
     chart.update('none');
   }, [lineVisibility]);
 
+  // Apply result coloring
   useEffect(() => {
     const chart = instanceRef.current;
     if (!chart) return;
@@ -94,15 +108,18 @@ export default function TrendChart({
   }, [showResult, games, mode, period, chartData]);
 
   if (!chartData) return null;
-  const { stat, tc } = chartData;
-  const label = METRICS[metricKey] || '';
+
+  const { stat, tc, isAllMetric } = chartData;
+  const metricLabel = METRICS[metricKey] || '';
+  // Show "Metric · Team" — for _All metrics omit team name
+  const chartTitle = isAllMetric ? metricLabel : `${metricLabel} · ${teamName}`;
 
   return (
     <div className="chart-panel">
       <div className="chart-header">
         <div className="chart-header-left">
           <div className="chart-sup">Tendência por Partida</div>
-          <div className="chart-metric-name">{label}</div>
+          <div className="chart-metric-name">{chartTitle}</div>
         </div>
         <div className="chart-header-right">
           <div className="chart-stats">
@@ -123,7 +140,9 @@ export default function TrendChart({
           </div>
         </div>
       </div>
+
       <div className="chart-wrap"><canvas ref={canvasRef} /></div>
+
       <div className="chart-legend">
         <div className="leg-item"><div className="leg-line" style={{ background: tc?.pt }} /><span>Realizado</span></div>
         <div className="leg-item"><div className="leg-line" style={{ background: '#f6ad55' }} /><span>Média móvel (3j)</span></div>
