@@ -1,28 +1,25 @@
-export async function handler(event, context) {
-  const SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRphdUYQ0F68J46Ur3pObAwZmuMSlByj_ZZ87bet93gA_GiF4RI9I6Yp9c5QP_JRTR61NFsSy0sFdjx/pub?gid=95433899&single=true&output=csv';
+export async function handler() {
+  const API_KEY    = 'cmofc0brd000111ibfzy1hmk9';
+  const DATASET_ID = 'cmmw9k1sb000ensbzhys9y70p';
+  const url        = `https://futpythontrader.com.br/api/download/${DATASET_ID}?api_key=${API_KEY}`;
 
-  const res = await fetch(SHEET_URL);
+  const res  = await fetch(url);
+  if (!res.ok) {
+    return {
+      statusCode: res.status,
+      body: JSON.stringify({ error: `API error: ${res.status}` }),
+    };
+  }
+
   const text = await res.text();
-
-  // Parse CSV to JSON
-  const lines = text.trim().split('\n');
-  const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
-  const rows = lines.slice(1).map(line => {
-    const values = line.split(',').map(v => v.trim().replace(/"/g, ''));
-    const obj = {};
-    headers.forEach((h, i) => {
-      const num = parseFloat(values[i]);
-      obj[h] = isNaN(num) ? values[i] : num;
-    });
-    return obj;
-  });
 
   return {
     statusCode: 200,
     headers: {
-      'Content-Type': 'application/json',
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Content-Type': 'text/csv',
+      'Cache-Control': 'no-cache',
+      'Access-Control-Allow-Origin': '*',
     },
-    body: JSON.stringify(rows),
+    body: text,
   };
 }

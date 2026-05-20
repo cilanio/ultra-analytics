@@ -1,11 +1,45 @@
+function parseCSV(text) {
+  const lines = text.trim().split('\n');
+  if (lines.length < 2) return [];
+
+  const parseRow = (line) => {
+    const result = [];
+    let current  = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        inQuotes = !inQuotes;
+      } else if (ch === ',' && !inQuotes) {
+        result.push(current.trim());
+        current = '';
+      } else {
+        current += ch;
+      }
+    }
+    result.push(current.trim());
+    return result;
+  };
+
+  const headers = parseRow(lines[0]);
+  return lines.slice(1)
+    .filter((l) => l.trim())
+    .map((line) => {
+      const values = parseRow(line);
+      const obj    = {};
+      headers.forEach((h, i) => {
+        const v   = values[i] ?? '';
+        const num = parseFloat(v);
+        obj[h]    = isNaN(num) ? v : num;
+      });
+      return obj;
+    })
+    .filter((r) => Object.values(r).some(Boolean));
+}
+
 const API_KEY    = 'cmofc0brd000111ibfzy1hmk9';
 const DATASET_ID = 'cmmw9k1sb000ensbzhys9y70p';
 
-/**
- * Loads match data from FutPythonTrader API.
- * Uses Vite proxy in development to bypass CORS.
- * In production (Netlify), calls the API directly via Netlify Function.
- */
 export async function loadFromSheets() {
   const isDev = import.meta.env.DEV;
   const url   = isDev
@@ -13,25 +47,10 @@ export async function loadFromSheets() {
     : `/.netlify/functions/getData`;
 
   const res = await fetch(url);
-  if (res.status === 401) throw new Error('API Key inválida');
-  if (!res.ok)            throw new Error(`HTTP ${res.status}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-  const text    = await res.text();
-  const lines   = text.trim().split('\n');
-  const headers = lines[0].split(',').map((h) => h.trim().replace(/"/g, ''));
-
-  const rows = lines.slice(1)
-    .filter((line) => line.trim())
-    .map((line) => {
-      const values = line.split(',').map((v) => v.trim().replace(/"/g, ''));
-      const obj    = {};
-      headers.forEach((h, i) => {
-        const num = parseFloat(values[i]);
-        obj[h]    = isNaN(num) ? values[i] : num;
-      });
-      return obj;
-    })
-    .filter((r) => Object.values(r).some(Boolean));
+  const text = await res.text();
+  const rows = parseCSV(text);
 
   if (!rows.length) throw new Error('Nenhum dado encontrado');
   return rows;
