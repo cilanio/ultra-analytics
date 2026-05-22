@@ -37,14 +37,18 @@ function parseCSV(text) {
     .filter((r) => Object.values(r).some(Boolean));
 }
 
-const API_KEY    = 'cmofc0brd000111ibfzy1hmk9';
 const DATASET_ID = 'cmmw9k1sb000ensbzhys9y70p';
 
 export async function loadFromSheets() {
   const isDev = import.meta.env.DEV;
-  const url   = isDev
-    ? `/api-proxy/api/download/${DATASET_ID}?api_key=${API_KEY}`
-    : `/.netlify/functions/getData`;
+
+  let url;
+  if (isDev) {
+    const API_KEY = import.meta.env.VITE_API_KEY_FUTPYTHON;
+    url = `/api-proxy/api/download/${DATASET_ID}?api_key=${API_KEY}`;
+  } else {
+    url = `/.netlify/functions/getData`;
+  }
 
   const res = await fetch(url);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);

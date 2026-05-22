@@ -1,9 +1,9 @@
 export async function handler() {
-  const API_KEY    = 'cmofc0brd000111ibfzy1hmk9';
+  const API_KEY    = process.env.API_KEY_FUTPYTHON;
   const DATASET_ID = 'cmmw9k1sb000ensbzhys9y70p';
   const url        = `https://futpythontrader.com.br/api/download/${DATASET_ID}?api_key=${API_KEY}`;
 
-  const res  = await fetch(url);
+  const res = await fetch(url);
   if (!res.ok) {
     return {
       statusCode: res.status,
