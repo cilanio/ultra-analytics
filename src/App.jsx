@@ -2,8 +2,10 @@ import { useEffect, useRef } from 'react';
 import { useMatchData }  from './hooks/useMatchData';
 import { useFilters }    from './hooks/useFilters';
 import { useExport }     from './hooks/useExport';
+import { useAuth }       from './hooks/useAuth';
 import { filterSort, applyN, buildStats } from './utils/stats';
 
+import LoginPage   from './components/LoginPage';
 import Header      from './components/Header';
 import LoadBar     from './components/LoadBar';
 import EmptyState  from './components/EmptyState';
@@ -11,9 +13,9 @@ import FiltersBar  from './components/FiltersBar';
 import SingleTab   from './components/SingleTab';
 import DualTab     from './components/DualTab';
 
-export default function App() {
+// Dashboard separado para que os hooks não violem a regra de ordem
+function Dashboard({ signOut }) {
   const { fullData, loading, error } = useMatchData();
-
   const filters = useFilters();
   const {
     activeTab,    setActiveTab,
@@ -61,7 +63,7 @@ export default function App() {
       <LoadBar status={status} />
       <div className="ambient" />
       <div className="wrap">
-        <Header status={status} message={message} />
+        <Header status={status} message={message} onSignOut={signOut} />
 
         {!isLoaded ? (
           <EmptyState status={status} />
@@ -92,12 +94,12 @@ export default function App() {
             {activeTab === 'single' && (
               <SingleTab
                 teams={teams}
-                teamA={teamA}           setTeamA={setTeamA}
-                modeA={modeA}           setModeA={setModeA}
+                teamA={teamA}               setTeamA={setTeamA}
+                modeA={modeA}               setModeA={setModeA}
                 activePeriod={activePeriod} setActivePeriod={setActivePeriod}
                 activeMetric={activeMetric} setActiveMetric={selectMetric}
                 multiMode={multiMode}
-                multiKeys={multiKeys}   onMultiChange={updateMultiKeys}
+                multiKeys={multiKeys}       onMultiChange={updateMultiKeys}
                 games={gamesA}
                 stats={statsA}
                 chartRef={exportChartRef}
@@ -107,12 +109,12 @@ export default function App() {
             {activeTab === 'dual' && (
               <DualTab
                 teams={teams}
-                teamHome={teamHome}     setTeamHome={setTeamHome}
-                teamAway={teamAway}     setTeamAway={setTeamAway}
+                teamHome={teamHome}         setTeamHome={setTeamHome}
+                teamAway={teamAway}         setTeamAway={setTeamAway}
                 activePeriod={activePeriod} setActivePeriod={setActivePeriod}
-                dualMetric={dualMetric} setDualMetric={setDualMetric}
-                gamesH={gamesH}         gamesAw={gamesAw}
-                statsH={statsH}         statsAw={statsAw}
+                dualMetric={dualMetric}     setDualMetric={setDualMetric}
+                gamesH={gamesH}             gamesAw={gamesAw}
+                statsH={statsH}             statsAw={statsAw}
                 chartRef={exportChartRef}
               />
             )}
@@ -121,4 +123,18 @@ export default function App() {
       </div>
     </>
   );
+}
+
+export default function App() {
+  const { user, loading: authLoading, signOut } = useAuth();
+
+  if (authLoading) return (
+    <div className="empty-state">
+      <div className="empty-title">Carregando…</div>
+    </div>
+  );
+
+  if (!user) return <LoginPage />;
+
+  return <Dashboard signOut={signOut} />;
 }
