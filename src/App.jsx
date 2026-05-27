@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import * as Sentry from '@sentry/react';
 import { useMatchData }  from './hooks/useMatchData';
 import { useFilters }    from './hooks/useFilters';
 import { useExport }     from './hooks/useExport';
@@ -13,7 +14,6 @@ import FiltersBar  from './components/FiltersBar';
 import SingleTab   from './components/SingleTab';
 import DualTab     from './components/DualTab';
 
-// Dashboard separado para que os hooks não violem a regra de ordem
 function Dashboard({ signOut }) {
   const { fullData, loading, error } = useMatchData();
   const filters = useFilters();
@@ -36,6 +36,11 @@ function Dashboard({ signOut }) {
   useEffect(() => {
     if (teams.length) initTeams(teams);
   }, [fullData]);
+
+  // Identify user in Sentry for better error tracking
+  useEffect(() => {
+    Sentry.setUser(signOut ? { id: 'authenticated' } : null);
+  }, []);
 
   const gamesA  = applyN(filterSort(fullData, teamA,    modeA),   lastN);
   const gamesH  = applyN(filterSort(fullData, teamHome, 'home'),  lastN);
@@ -125,6 +130,25 @@ function Dashboard({ signOut }) {
   );
 }
 
+// Fallback shown when Sentry catches an unhandled error
+function ErrorFallback({ error }) {
+  return (
+    <div className="empty-state">
+      <div className="empty-title">Algo deu errado</div>
+      <div className="empty-sub">
+        O erro foi registrado automaticamente. Tente recarregar a página.
+      </div>
+      <button
+        className="export-btn"
+        style={{ marginTop: '1rem' }}
+        onClick={() => window.location.reload()}
+      >
+        Recarregar
+      </button>
+    </div>
+  );
+}
+
 export default function App() {
   const { user, loading: authLoading, signOut } = useAuth();
 
@@ -136,5 +160,9 @@ export default function App() {
 
   if (!user) return <LoginPage />;
 
-  return <Dashboard signOut={signOut} />;
+  return (
+    <Sentry.ErrorBoundary fallback={ErrorFallback}>
+      <Dashboard signOut={signOut} />
+    </Sentry.ErrorBoundary>
+  );
 }
