@@ -1,9 +1,10 @@
+import DashboardSkeleton from './components/Skeleton';
 import { useEffect, useRef } from 'react';
 import * as Sentry from '@sentry/react';
-import { useMatchData }  from './hooks/useMatchData';
-import { useFilters }    from './hooks/useFilters';
-import { useExport }     from './hooks/useExport';
-import { useAuth }       from './hooks/useAuth';
+import { useMatchData } from './hooks/useMatchData';
+import { useExport }    from './hooks/useExport';
+import { useAuth }      from './hooks/useAuth';
+import { useAppStore }  from './store/useAppStore';
 import { filterSort, applyN, buildStats } from './utils/stats';
 
 import LoginPage   from './components/LoginPage';
@@ -16,7 +17,7 @@ import DualTab     from './components/DualTab';
 
 function Dashboard({ signOut }) {
   const { fullData, loading, error } = useMatchData();
-  const filters = useFilters();
+
   const {
     activeTab,    setActiveTab,
     lastN,        setLastN,
@@ -29,7 +30,7 @@ function Dashboard({ signOut }) {
     teamAway,     setTeamAway,
     dualMetric,   setDualMetric,
     initTeams,
-  } = filters;
+  } = useAppStore();
 
   const teams = [...new Set(fullData.map((d) => d.Home).filter(Boolean))].sort();
 
@@ -37,7 +38,6 @@ function Dashboard({ signOut }) {
     if (teams.length) initTeams(teams);
   }, [fullData]);
 
-  // Identify user in Sentry for better error tracking
   useEffect(() => {
     Sentry.setUser(signOut ? { id: 'authenticated' } : null);
   }, []);
@@ -71,8 +71,10 @@ function Dashboard({ signOut }) {
         <Header status={status} message={message} onSignOut={signOut} />
 
         {!isLoaded ? (
-          <EmptyState status={status} />
-        ) : (
+  status === 'error'
+    ? <EmptyState status={status} />
+    : <DashboardSkeleton />
+	) : (
           <>
             <div className="tabs">
               {[
@@ -130,8 +132,7 @@ function Dashboard({ signOut }) {
   );
 }
 
-// Fallback shown when Sentry catches an unhandled error
-function ErrorFallback({ error }) {
+function ErrorFallback() {
   return (
     <div className="empty-state">
       <div className="empty-title">Algo deu errado</div>
