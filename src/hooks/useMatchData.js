@@ -1,20 +1,30 @@
 import { useState, useEffect } from 'react';
 import { loadFromSheets } from '../services/sheetsApi';
 
-/**
- * Loads match data once on mount.
- * No component calls fetch directly — only this hook does via sheetsApi.
- */
 export function useMatchData() {
-  const [fullData, setFullData] = useState([]);
+  const [allData,  setAllData]  = useState({ brasileirao: [], 'copa-brasil': [], libertadores: [] });
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState(null);
 
   useEffect(() => {
-    loadFromSheets()
-      .then((data) => { setFullData(data); setLoading(false); })
-      .catch((err) => { setError(err.message); setLoading(false); });
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const [br, copa, libert] = await Promise.all([
+          loadFromSheets('brasileirao'),
+          loadFromSheets('copa-brasil'),
+          loadFromSheets('libertadores'),
+        ]);
+        setAllData({ brasileirao: br, 'copa-brasil': copa, libertadores: libert });
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
   }, []);
 
-  return { fullData, loading, error };
+  return { allData, loading, error };
 }

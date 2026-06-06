@@ -1,6 +1,9 @@
 import { create } from 'zustand';
 
 export const useAppStore = create((set, get) => ({
+  // ── Competition
+  competitionId: 'brasileirao',
+
   // ── Shared
   activeTab:    'single',
   lastN:        999,
@@ -19,6 +22,8 @@ export const useAppStore = create((set, get) => ({
   dualMetric: 'Total_Shots',
 
   // ── Actions
+  // NOTE: competitionId change no longer resets teams
+  setCompetitionId: (v) => set({ competitionId: v }),
   setActiveTab:    (v) => set({ activeTab: v }),
   setLastN:        (v) => set({ lastN: v }),
   setActivePeriod: (v) => set({ activePeriod: v }),

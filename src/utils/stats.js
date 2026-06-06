@@ -1,4 +1,5 @@
 import { METRIC_KEYS, METRICS } from '../constants/metrics';
+import { normalizeTeamName } from '../services/sheetsApi';
 
 export const avg = (arr) =>
   arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
@@ -57,7 +58,6 @@ export function resultByPeriod(g, mode, period) {
 
 export function getVal(g, key, mode, period) {
   const m = eMode(g, mode);
-  // Always sum both teams regardless of mode — gives total shots in the match
   if (key === 'Total_Shots_All')
     return (parseFloat(g[`Total_Shots_Home_${period}`]) || 0) +
            (parseFloat(g[`Total_Shots_Away_${period}`]) || 0);
@@ -89,21 +89,50 @@ export function buildStats(games, mode, period) {
 }
 
 export function filterSort(fullData, team, mode) {
+  const teamNorm = normalizeTeamName(team);
+
   let rows;
+
   if (mode === 'all') {
-    const home = fullData.filter((g) => g.Home === team).map((g) => ({ ...g, _mode: 'home' }));
-    const away = fullData.filter((g) => g.Away === team).map((g) => ({ ...g, _mode: 'away' }));
+    // Combine home and away games for the team across all competitions
+    const home = fullData
+      .filter((g) => (g._homeNorm || normalizeTeamName(g.Home)) === teamNorm)
+      .map((g) => ({ ...g, _mode: 'home' }));
+    const away = fullData
+      .filter((g) => (g._awayNorm || normalizeTeamName(g.Away)) === teamNorm)
+      .map((g) => ({ ...g, _mode: 'away' }));
     rows = [...home, ...away];
+  } else if (mode === 'home') {
+    rows = fullData
+      .filter((g) => (g._homeNorm || normalizeTeamName(g.Home)) === teamNorm)
+      .map((g) => ({ ...g, _mode: 'home' }));
   } else {
     rows = fullData
-      .filter((g) => (mode === 'home' ? g.Home === team : g.Away === team))
-      .map((g) => ({ ...g, _mode: mode }));
+      .filter((g) => (g._awayNorm || normalizeTeamName(g.Away)) === teamNorm)
+      .map((g) => ({ ...g, _mode: 'away' }));
   }
+
+	console.log('Sample dates:', rows.slice(0, 5).map(r => ({ Date: r.Date, Home: r.Home, Away: r.Away })));
+
+  // Sort chronologically — parse DD/MM/YYYY or YYYY-MM-DD
   return rows.sort((a, b) => {
-    if (!a.Date && !b.Date) return 0;
-    if (!a.Date) return 1;
-    if (!b.Date) return -1;
-    return new Date(a.Date) - new Date(b.Date);
+    const parseDate = (d) => {
+      if (!d) return null;
+      const s = String(d);
+      // DD/MM/YYYY
+      if (s.includes('/')) {
+        const [day, month, year] = s.split('/');
+        return new Date(`${year}-${month}-${day}`);
+      }
+      // YYYY-MM-DD
+      return new Date(s);
+    };
+    const da = parseDate(a.Date);
+    const db = parseDate(b.Date);
+    if (!da && !db) return 0;
+    if (!da) return 1;
+    if (!db) return -1;
+    return da - db;
   });
 }
 

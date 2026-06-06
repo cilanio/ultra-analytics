@@ -1,24 +1,26 @@
-import DashboardSkeleton from './components/Skeleton';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useMemo } from 'react';
 import * as Sentry from '@sentry/react';
-import { useMatchData } from './hooks/useMatchData';
-import { useExport }    from './hooks/useExport';
-import { useAuth }      from './hooks/useAuth';
-import { useAppStore }  from './store/useAppStore';
+import { useMatchData }  from './hooks/useMatchData';
+import { useExport }     from './hooks/useExport';
+import { useAuth }       from './hooks/useAuth';
+import { useAppStore }   from './store/useAppStore';
 import { filterSort, applyN, buildStats } from './utils/stats';
+import { normalizeTeamName } from './services/sheetsApi';
+import { COMPETITION_MAP } from './constants/competitions';
 
-import LoginPage   from './components/LoginPage';
-import Header      from './components/Header';
-import LoadBar     from './components/LoadBar';
-import EmptyState  from './components/EmptyState';
-import FiltersBar  from './components/FiltersBar';
-import SingleTab   from './components/SingleTab';
-import DualTab     from './components/DualTab';
+import LoginPage            from './components/LoginPage';
+import Header               from './components/Header';
+import LoadBar              from './components/LoadBar';
+import EmptyState           from './components/EmptyState';
+import FiltersBar           from './components/FiltersBar';
+import SingleTab            from './components/SingleTab';
+import DualTab              from './components/DualTab';
+import CompetitionSelector  from './components/CompetitionSelector';
+import DashboardSkeleton    from './components/Skeleton';
 
 function Dashboard({ signOut }) {
-  const { fullData, loading, error } = useMatchData();
-
   const {
+    competitionId, setCompetitionId,
     activeTab,    setActiveTab,
     lastN,        setLastN,
     activePeriod, setActivePeriod,
@@ -32,36 +34,90 @@ function Dashboard({ signOut }) {
     initTeams,
   } = useAppStore();
 
-  const teams = [...new Set(fullData.map((d) => d.Home).filter(Boolean))].sort();
+  const { allData, loading, error } = useMatchData();
+
+  // ── Derive fullData based on selected competition (local filter)
+  const fullData = useMemo(() => {
+    if (competitionId === 'all') {
+      return [
+        ...allData.brasileirao,
+        ...allData['copa-brasil'],
+        ...allData.libertadores,
+      ].sort((a, b) => {
+        const parseDate = (d) => {
+          if (!d) return null;
+          const s = String(d);
+          if (s.includes('/')) {
+            const [day, month, year] = s.split('/');
+            return new Date(`${year}-${month}-${day}`);
+          }
+          return new Date(s);
+        };
+        const da = parseDate(a.Date);
+        const db = parseDate(b.Date);
+        if (!da && !db) return 0;
+        if (!da) return 1;
+        if (!db) return -1;
+        return da - db;
+      });
+    }
+    return allData[competitionId] || [];
+  }, [allData, competitionId]);
+
+  // ── Teams list — only Brazilian teams in Libertadores
+  const teams = useMemo(() => {
+    if (competitionId === 'all') {
+      return [...new Set(allData.brasileirao.map((d) => d.Home).filter(Boolean))].sort();
+    }
+    if (competitionId === 'libertadores') {
+      const brTeamsNorm = new Set(
+        allData.brasileirao.map((d) => normalizeTeamName(d.Home)).filter(Boolean)
+      );
+      const libertTeams = [...new Set(allData.libertadores.map((d) => d.Home).filter(Boolean))];
+      return libertTeams
+        .filter((t) => brTeamsNorm.has(normalizeTeamName(t)))
+        .sort();
+    }
+    return [...new Set(fullData.map((d) => d.Home).filter(Boolean))].sort();
+  }, [allData, competitionId, fullData]);
 
   useEffect(() => {
     if (teams.length) initTeams(teams);
-  }, [fullData]);
+  }, [teams]);
 
   useEffect(() => {
-    Sentry.setUser(signOut ? { id: 'authenticated' } : null);
+    Sentry.setUser({ id: 'authenticated' });
   }, []);
 
-  const gamesA  = applyN(filterSort(fullData, teamA,    modeA),   lastN);
-  const gamesH  = applyN(filterSort(fullData, teamHome, 'home'),  lastN);
-  const gamesAw = applyN(filterSort(fullData, teamAway, 'away'),  lastN);
-  const statsA  = buildStats(gamesA,  modeA,   activePeriod);
-  const statsH  = buildStats(gamesH,  'home',  activePeriod);
-  const statsAw = buildStats(gamesAw, 'away',  activePeriod);
+  // ── Mode — force 'all' when viewing all competitions
+  const effectiveModeA = competitionId === 'all' ? 'all' : modeA;
 
+  // ── Derived game arrays
+  const gamesA  = applyN(filterSort(fullData, teamA,    effectiveModeA), lastN);
+  const gamesH  = applyN(filterSort(fullData, teamHome, 'home'),         lastN);
+  const gamesAw = applyN(filterSort(fullData, teamAway, 'away'),         lastN);
+
+  // ── Stats
+  const statsA  = buildStats(gamesA,  effectiveModeA, activePeriod);
+  const statsH  = buildStats(gamesH,  'home',         activePeriod);
+  const statsAw = buildStats(gamesAw, 'away',         activePeriod);
+
+  // ── Export
   const exportChartRef = useRef(null);
   const { exportPNG, exportCSV } = useExport(
-    exportChartRef, gamesA, modeA, activePeriod, activeMetric, teamA
+    exportChartRef, gamesA, effectiveModeA, activePeriod, activeMetric, teamA
   );
 
-  const status  = loading ? 'loading' : error ? 'error' : 'live';
-  const message = loading
+  // ── Status
+  const competition = COMPETITION_MAP[competitionId];
+  const compName    = competitionId === 'all' ? 'Todos os Jogos' : competition?.name || '';
+  const status      = loading ? 'loading' : error ? 'error' : 'live';
+  const message     = loading
     ? 'Carregando dados…'
     : error
     ? `Erro: ${error}`
-    : `${fullData.length} partidas · Brasileirão 2026`;
-
-  const isLoaded = !loading && !error && fullData.length > 0;
+    : `${fullData.length} partidas · ${compName}`;
+  const isLoaded    = !loading && !error && allData.brasileirao.length > 0;
 
   return (
     <>
@@ -70,11 +126,16 @@ function Dashboard({ signOut }) {
       <div className="wrap">
         <Header status={status} message={message} onSignOut={signOut} />
 
+        <CompetitionSelector
+          competitionId={competitionId}
+          onChange={setCompetitionId}
+        />
+
         {!isLoaded ? (
-  status === 'error'
-    ? <EmptyState status={status} />
-    : <DashboardSkeleton />
-	) : (
+          status === 'error'
+            ? <EmptyState status={status} />
+            : <DashboardSkeleton />
+        ) : (
           <>
             <div className="tabs">
               {[
@@ -102,7 +163,7 @@ function Dashboard({ signOut }) {
               <SingleTab
                 teams={teams}
                 teamA={teamA}               setTeamA={setTeamA}
-                modeA={modeA}               setModeA={setModeA}
+                modeA={effectiveModeA}      setModeA={setModeA}
                 activePeriod={activePeriod} setActivePeriod={setActivePeriod}
                 activeMetric={activeMetric} setActiveMetric={selectMetric}
                 multiMode={multiMode}
