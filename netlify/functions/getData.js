@@ -36,12 +36,12 @@ export async function handler(event) {
   }
 
   const text = await res.text();
+
+  // Parse without dynamicTyping — convert manually to preserve Date as string
   const { data, errors } = Papa.parse(text, {
     header: true,
-    dynamicTyping: true,
+    dynamicTyping: false,
     skipEmptyLines: true,
-    // Preserve Date and Time as strings
-    dynamicTypingFunction: (field) => field !== 'Date' && field !== 'Time',
   });
 
   if (errors.length) {
@@ -51,12 +51,23 @@ export async function handler(event) {
     };
   }
 
-  const tagged = data.map((row) => ({
-    ...row,
-    Home: normalizeTeamName(row.Home),
-    Away: normalizeTeamName(row.Away),
-    _competition: competition,
-  }));
+  const STRING_FIELDS = new Set(['Date', 'Time', 'Home', 'Away', 'League', 'Country', 'Div', 'Season', 'Match_ID']);
+
+  const tagged = data.map((row) => {
+    const obj = { _competition: competition };
+    Object.entries(row).forEach(([k, v]) => {
+      if (STRING_FIELDS.has(k) || k.startsWith('Min_')) {
+        obj[k] = v; // keep as string
+      } else {
+        const num = parseFloat(v);
+        obj[k] = isNaN(num) ? v : num;
+      }
+      // Normalize team names
+      if (k === 'Home') obj[k] = normalizeTeamName(v);
+      if (k === 'Away') obj[k] = normalizeTeamName(v);
+    });
+    return obj;
+  });
 
   return {
     statusCode: 200,
